@@ -54,7 +54,7 @@ func TableNumber(tableNumber int, maxTable int) error {
 func Name(s string) (string, error) {
 	match, _ := regexp.MatchString("^[a-z0-9_-]+$", s)
 	if !match {
-		return "", fmt.Errorf("invalid client name: %v. Must only contain characters from a-z, 0-9, _, -", s)
+		return "", fmt.Errorf("invalid client name: %v. Must only contain characters from [a-z, 0-9, _, -]", s)
 	}
 	return s, nil
 }
