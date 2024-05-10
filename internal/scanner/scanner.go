@@ -28,7 +28,7 @@ func Scan(fileName string) (*config.Specs, []domain.Event, error) {
 		return nil, nil, fmt.Errorf("failed to scan specs: %w", err)
 	}
 
-	events, err := parseAndValidateEvents(in)
+	events, err := parseAndValidateEvents(in, specs.AmountOfTables)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to scan events: %w", err)
 	}
@@ -98,7 +98,7 @@ func parsePrice(in *bufio.Reader, specs *config.Specs) error {
 	return validate.Price(specs.Price)
 }
 
-func parseAndValidateEvents(in *bufio.Reader) ([]domain.Event, error) {
+func parseAndValidateEvents(in *bufio.Reader, maxTable int) ([]domain.Event, error) {
 	var events []domain.Event
 	var lastEvent domain.Event
 	for {
@@ -110,7 +110,7 @@ func parseAndValidateEvents(in *bufio.Reader) ([]domain.Event, error) {
 			return nil, err
 		}
 
-		event, err := parseEvent(line, lastEvent)
+		event, err := parseEvent(line, lastEvent, maxTable)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +122,7 @@ func parseAndValidateEvents(in *bufio.Reader) ([]domain.Event, error) {
 	return events, nil
 }
 
-func parseEvent(line string, lastEvent domain.Event) (*domain.Event, error) {
+func parseEvent(line string, lastEvent domain.Event, maxTable int) (*domain.Event, error) {
 	parts := strings.Fields(line)
 	if len(parts) < 3 || len(parts) > 4 {
 		return nil, fmt.Errorf("invalid event length: %v. Must contain 3 or 4 fields", parts)
@@ -151,7 +151,7 @@ func parseEvent(line string, lastEvent domain.Event) (*domain.Event, error) {
 	}
 
 	if len(parts) == 4 {
-		event.TableNumber, err = parseTableNumber(parts[3])
+		event.TableNumber, err = parseTableNumber(parts[3], maxTable)
 		if err != nil {
 			return nil, err
 		}
@@ -178,13 +178,13 @@ func parseID(idStr string) (int, error) {
 	return id, nil
 }
 
-func parseTableNumber(tableNumberStr string) (int, error) {
+func parseTableNumber(tableNumberStr string, maxTable int) (int, error) {
 	tableNumber, err := strconv.Atoi(tableNumberStr)
 	if err != nil {
 		return 0, err
 	}
 
-	err = validate.TableNumber(tableNumber)
+	err = validate.TableNumber(tableNumber, maxTable)
 	if err != nil {
 		return 0, err
 	}

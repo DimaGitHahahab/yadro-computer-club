@@ -44,9 +44,9 @@ func ID(id int) error {
 	return nil
 }
 
-func TableNumber(tableNumber int) error {
-	if tableNumber < 1 {
-		return fmt.Errorf("invalid table number: %v. Must be a positive integer", tableNumber)
+func TableNumber(tableNumber int, maxTable int) error {
+	if tableNumber < 1 || tableNumber > maxTable {
+		return fmt.Errorf("invalid table number: %v. Expected 1 <= table number <= number of tables(%d)", tableNumber, maxTable)
 	}
 	return nil
 }
