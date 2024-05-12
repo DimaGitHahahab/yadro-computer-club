@@ -23,12 +23,12 @@ func Scan(fileName string) (*config.Specs, []domain.Event, error) {
 
 	in := bufio.NewReader(file)
 
-	specs, err := parseAndValidateSpecs(in)
+	specs, err := scanSpecs(in)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to scan specs: %w", err)
 	}
 
-	events, err := parseAndValidateEvents(in, specs.AmountOfTables)
+	events, err := scanEvents(in, specs.AmountOfTables)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to scan events: %w", err)
 	}
@@ -36,83 +36,125 @@ func Scan(fileName string) (*config.Specs, []domain.Event, error) {
 	return specs, events, nil
 }
 
-func parseAndValidateSpecs(in *bufio.Reader) (*config.Specs, error) {
+func scanSpecs(in *bufio.Reader) (*config.Specs, error) {
 	specs := &config.Specs{}
 
-	err := parseTables(in, specs)
+	err := scanTables(in, specs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse tables: %w", err)
 	}
 
-	err = parseTimes(in, specs)
+	err = scanTimes(in, specs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse times: %w", err)
 	}
 
-	err = parsePrice(in, specs)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = in.ReadString('\n'); err != nil {
-		return nil, err
+	if err = scanPrice(in, specs); err != nil {
+		return nil, fmt.Errorf("failed to parse price: %w", err)
 	}
 
 	return specs, nil
 }
 
-func parseTables(in *bufio.Reader, specs *config.Specs) error {
-	if _, err := fmt.Fscan(in, &specs.AmountOfTables); err != nil {
-		return err
+func scanTables(in *bufio.Reader, specs *config.Specs) error {
+	line, err := in.ReadString('\n')
+	line = strings.TrimSpace(line)
+	if err != nil {
+		return domain.NewLineError(err, line)
+	}
+	table := strings.Fields(line)
+	if len(table) != 1 {
+		return domain.NewLineError(fmt.Errorf("invalid amount of fields where amount of tables should be: %d", len(table)), line)
 	}
 
-	return validate.Tables(specs.AmountOfTables)
+	if specs.AmountOfTables, err = strconv.Atoi(table[0]); err != nil {
+		return domain.NewLineError(err, line)
+	}
+
+	if err = validate.Tables(specs.AmountOfTables); err != nil {
+		return domain.NewLineError(err, line)
+	}
+
+	return nil
 }
 
-func parseTimes(in *bufio.Reader, specs *config.Specs) error {
-	var openingStr, closingStr string
-	if _, err := fmt.Fscan(in, &openingStr, &closingStr); err != nil {
-		return err
+func scanTimes(in *bufio.Reader, specs *config.Specs) error {
+	line, err := in.ReadString('\n')
+	line = strings.TrimSpace(line)
+	if err != nil {
+		return domain.NewLineError(err, line)
 	}
 
-	opening, err := time.Parse(domain.TimeLayout, openingStr)
+	times := strings.Fields(line)
+	if len(times) != 2 {
+		return domain.NewLineError(
+			fmt.Errorf("invalid amount of fields where opening and closing times should be: %d", len(times)),
+			line,
+		)
+	}
+
+	opening, err := time.Parse(domain.TimeLayout, times[0])
 	if err != nil {
-		return err
+		return domain.NewLineError(err, line)
 	}
 	specs.Opening = opening
 
-	closing, err := time.Parse(domain.TimeLayout, closingStr)
+	closing, err := time.Parse(domain.TimeLayout, times[1])
 	if err != nil {
-		return err
+		return domain.NewLineError(err, line)
 	}
 	specs.Closing = closing
 
-	return validate.Times(specs.Opening, specs.Closing)
-}
-
-func parsePrice(in *bufio.Reader, specs *config.Specs) error {
-	if _, err := fmt.Fscan(in, &specs.Price); err != nil {
-		return err
+	if err := validate.Times(specs.Opening, specs.Closing); err != nil {
+		return domain.NewLineError(fmt.Errorf("failed to validate times: %w", err), line)
 	}
 
-	return validate.Price(specs.Price)
+	return nil
 }
 
-func parseAndValidateEvents(in *bufio.Reader, maxTable int) ([]domain.Event, error) {
+func scanPrice(in *bufio.Reader, specs *config.Specs) error {
+	line, err := in.ReadString('\n')
+	line = strings.TrimSpace(line)
+	if err != nil {
+		return domain.NewLineError(err, line)
+	}
+
+	price := strings.Fields(line)
+	if len(price) != 1 {
+		return domain.NewLineError(fmt.Errorf("invalid amount of fields where price should be: %d", len(price)), line)
+	}
+
+	if specs.Price, err = strconv.Atoi(price[0]); err != nil {
+		return domain.NewLineError(err, line)
+	}
+
+	if err := validate.Price(specs.Price); err != nil {
+		return domain.NewLineError(fmt.Errorf("failed to validate price: %w", err), line)
+	}
+
+	return nil
+}
+
+func scanEvents(in *bufio.Reader, maxTable int) ([]domain.Event, error) {
 	var events []domain.Event
 	var lastEvent domain.Event
-	for {
+	shouldRead := true
+	for shouldRead {
 		line, err := in.ReadString('\n')
+		line = strings.TrimSpace(line)
 		if err != nil {
 			if err == io.EOF {
-				break
+				shouldRead = false
+				if line == "" {
+					break
+				}
+			} else {
+				return nil, domain.NewLineError(err, line)
 			}
-			return nil, err
 		}
-
-		event, err := parseEvent(line, lastEvent, maxTable)
+		event, err := scanEvent(line, lastEvent, maxTable)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse event: %w", err)
 		}
 
 		events = append(events, *event)
@@ -122,49 +164,47 @@ func parseAndValidateEvents(in *bufio.Reader, maxTable int) ([]domain.Event, err
 	return events, nil
 }
 
-func parseEvent(line string, lastEvent domain.Event, maxTable int) (*domain.Event, error) {
+func scanEvent(line string, lastEvent domain.Event, maxTable int) (*domain.Event, error) {
 	parts := strings.Fields(line)
 	if len(parts) < 3 || len(parts) > 4 {
-		return nil, fmt.Errorf("invalid event length: %v. Must contain 3 or 4 fields", parts)
+		return nil, domain.NewLineError(fmt.Errorf("invalid event length: %v. Must contain 3 or 4 fields", parts), line)
 	}
-
-	event := &domain.Event{}
-	var err error
-
-	event.TimeStamp, err = parseTimeStamp(parts[0])
+	event, err := scanEventParts(lastEvent, parts)
 	if err != nil {
-		return nil, err
+		return nil, domain.NewLineError(err, line)
 	}
-
-	err = validate.EventOrder(lastEvent.TimeStamp, event.TimeStamp)
-	if err != nil {
-		return nil, err
-	}
-
-	event.ID, err = parseID(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	if event.ClientName, err = validate.Name(parts[2]); err != nil {
-		return nil, err
-	}
-
-	if len(parts) == 4 {
-		event.TableNumber, err = parseTableNumber(parts[3], maxTable)
-		if err != nil {
-			return nil, err
+	if event.ID == 2 {
+		if len(parts) != 4 {
+			return nil, domain.NewLineError(fmt.Errorf("invalid event ID for line with 4 fields: %d", event.ID), line)
 		}
-	}
+		event.TableNumber, err = scanTableNumber(parts[3], maxTable)
+		if err != nil {
+			return nil, domain.NewLineError(err, line)
+		}
 
+	}
 	return event, nil
 }
 
-func parseTimeStamp(timeStr string) (time.Time, error) {
-	return time.Parse(domain.TimeLayout, timeStr)
+func scanEventParts(lastEvent domain.Event, parts []string) (*domain.Event, error) {
+	event := &domain.Event{}
+	var err error
+	if event.TimeStamp, err = time.Parse(domain.TimeLayout, parts[0]); err != nil {
+		return nil, fmt.Errorf("failed to parse time: %w", err)
+	}
+	if err = validate.EventOrder(lastEvent.TimeStamp, event.TimeStamp); err != nil {
+		return nil, fmt.Errorf("failed to validate event order: %w", err)
+	}
+	if event.ID, err = scanID(parts[1]); err != nil {
+		return nil, fmt.Errorf("failed to scan ID: %w", err)
+	}
+	if event.ClientName, err = validate.Name(parts[2]); err != nil {
+		return nil, fmt.Errorf("failed to validate name: %w", err)
+	}
+	return event, nil
 }
 
-func parseID(idStr string) (int, error) {
+func scanID(idStr string) (int, error) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		return 0, err
@@ -178,7 +218,7 @@ func parseID(idStr string) (int, error) {
 	return id, nil
 }
 
-func parseTableNumber(tableNumberStr string, maxTable int) (int, error) {
+func scanTableNumber(tableNumberStr string, maxTable int) (int, error) {
 	tableNumber, err := strconv.Atoi(tableNumberStr)
 	if err != nil {
 		return 0, err

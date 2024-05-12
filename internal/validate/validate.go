@@ -11,7 +11,7 @@ import (
 
 func Tables(amountOfTables int) error {
 	if amountOfTables <= 0 {
-		return fmt.Errorf("invalid number of tables: %v. Must be a positive integer", amountOfTables)
+		return fmt.Errorf("invalid number of tables. Must be a positive integer")
 	}
 	return nil
 }
@@ -38,8 +38,8 @@ func EventOrder(lastEvent, currentEvent time.Time) error {
 }
 
 func ID(id int) error {
-	if id < 1 || id > 13 {
-		return fmt.Errorf("invalid client ID: %v. Must be an integer between 1 and 13", id)
+	if id < 1 || id > 13 || (id > 4 && id < 11) {
+		return fmt.Errorf("invalid event ID: %d", id)
 	}
 	return nil
 }

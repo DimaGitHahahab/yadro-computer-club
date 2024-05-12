@@ -31,11 +31,11 @@ func (e Event) String() string {
 	return s + " " + strconv.Itoa(e.TableNumber)
 }
 
-type ErrEvent struct {
+type OutputEvent struct {
 	BaseEvent
 	Message string
 }
 
-func (e ErrEvent) String() string {
-	return fmt.Sprintf("%s %s %d", e.BaseEvent, e.Message)
+func (e OutputEvent) String() string {
+	return fmt.Sprintf("%s %s", e.BaseEvent, e.Message)
 }
