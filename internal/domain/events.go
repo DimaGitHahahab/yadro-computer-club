@@ -17,6 +17,7 @@ func (e BaseEvent) String() string {
 	return fmt.Sprintf("%s %d", e.TimeStamp.Format(TimeLayout), e.ID)
 }
 
+// Event is an incoming event
 type Event struct {
 	BaseEvent
 	ClientName  string
@@ -31,6 +32,7 @@ func (e Event) String() string {
 	return s + " " + strconv.Itoa(e.TableNumber)
 }
 
+// OutputEvent is an event to be printed
 type OutputEvent struct {
 	BaseEvent
 	Message string

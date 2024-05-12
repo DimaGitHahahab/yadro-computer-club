@@ -1,5 +1,7 @@
 package domain
 
+// LineError stores invalid line to be printed (as it said in task description),
+// and normal error with user-friendly message
 type LineError struct {
 	Err  error
 	Line string

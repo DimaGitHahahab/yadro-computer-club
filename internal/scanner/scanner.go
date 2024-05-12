@@ -14,6 +14,8 @@ import (
 	"github.com/DimaGitHahahab/yadro-computer-club/pkg/config"
 )
 
+// Scan reads, parses and validates the input file.
+// In case of invalid line, it returns domain.LineError, else just normal error.
 func Scan(fileName string) (*config.Specs, []domain.Event, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -36,10 +38,11 @@ func Scan(fileName string) (*config.Specs, []domain.Event, error) {
 	return specs, events, nil
 }
 
+// scanSpecs scans first 3 lines from bufio.Reader
 func scanSpecs(in *bufio.Reader) (*config.Specs, error) {
 	specs := &config.Specs{}
 
-	err := scanTables(in, specs)
+	err := scanAmountOfTables(in, specs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tables: %w", err)
 	}
@@ -56,7 +59,7 @@ func scanSpecs(in *bufio.Reader) (*config.Specs, error) {
 	return specs, nil
 }
 
-func scanTables(in *bufio.Reader, specs *config.Specs) error {
+func scanAmountOfTables(in *bufio.Reader, specs *config.Specs) error {
 	line, err := in.ReadString('\n')
 	line = strings.TrimSpace(line)
 	if err != nil {

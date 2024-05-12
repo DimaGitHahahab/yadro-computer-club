@@ -66,7 +66,7 @@ func (s *ClientService) GetAllClients() []domain.Client {
 		clients = append(clients, cl)
 	}
 
-	sort.Slice(clients, func(i, j int) bool {
+	sort.Slice(clients, func(i, j int) bool { // to return alphabetically
 		return string(clients[i]) < string(clients[j])
 	})
 
