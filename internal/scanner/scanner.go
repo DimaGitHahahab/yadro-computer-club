@@ -95,7 +95,9 @@ func scanTimes(in *bufio.Reader, specs *config.Specs) error {
 			line,
 		)
 	}
-
+	if len(times[0]) != 5 || len(times[1]) != 5 {
+		return domain.NewLineError(fmt.Errorf("invalid time format: %v. Must be in the format HH:MM", times), line)
+	}
 	opening, err := time.Parse(domain.TimeLayout, times[0])
 	if err != nil {
 		return domain.NewLineError(err, line)
@@ -192,6 +194,9 @@ func scanEvent(line string, lastEvent domain.Event, maxTable int) (*domain.Event
 func scanEventParts(lastEvent domain.Event, parts []string) (*domain.Event, error) {
 	event := &domain.Event{}
 	var err error
+	if len(parts[0]) != 5 {
+		return nil, fmt.Errorf("invalid time format: %v. Must be in the format HH:MM", parts[0])
+	}
 	if event.TimeStamp, err = time.Parse(domain.TimeLayout, parts[0]); err != nil {
 		return nil, fmt.Errorf("failed to parse time: %w", err)
 	}
