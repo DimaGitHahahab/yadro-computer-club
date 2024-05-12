@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -60,10 +61,9 @@ func scanSpecs(in *bufio.Reader) (*config.Specs, error) {
 }
 
 func scanAmountOfTables(in *bufio.Reader, specs *config.Specs) error {
-	line, err := in.ReadString('\n')
-	line = strings.TrimSpace(line)
+	line, err := readLine(in)
 	if err != nil {
-		return domain.NewLineError(err, line)
+		return err
 	}
 	table := strings.Fields(line)
 	if len(table) != 1 {
@@ -82,33 +82,17 @@ func scanAmountOfTables(in *bufio.Reader, specs *config.Specs) error {
 }
 
 func scanTimes(in *bufio.Reader, specs *config.Specs) error {
-	line, err := in.ReadString('\n')
-	line = strings.TrimSpace(line)
+	line, err := readLine(in)
 	if err != nil {
-		return domain.NewLineError(err, line)
+		return err
 	}
 
-	times := strings.Fields(line)
-	if len(times) != 2 {
-		return domain.NewLineError(
-			fmt.Errorf("invalid amount of fields where opening and closing times should be: %d", len(times)),
-			line,
-		)
-	}
-	if len(times[0]) != 5 || len(times[1]) != 5 {
-		return domain.NewLineError(fmt.Errorf("invalid time format: %v. Must be in the format HH:MM", times), line)
-	}
-	opening, err := time.Parse(domain.TimeLayout, times[0])
+	opening, closing, err := parseTimes(line)
 	if err != nil {
 		return domain.NewLineError(err, line)
 	}
-	specs.Opening = opening
-
-	closing, err := time.Parse(domain.TimeLayout, times[1])
-	if err != nil {
-		return domain.NewLineError(err, line)
-	}
-	specs.Closing = closing
+	specs.Opening = *opening
+	specs.Closing = *closing
 
 	if err := validate.Times(specs.Opening, specs.Closing); err != nil {
 		return domain.NewLineError(fmt.Errorf("failed to validate times: %w", err), line)
@@ -117,11 +101,31 @@ func scanTimes(in *bufio.Reader, specs *config.Specs) error {
 	return nil
 }
 
-func scanPrice(in *bufio.Reader, specs *config.Specs) error {
-	line, err := in.ReadString('\n')
-	line = strings.TrimSpace(line)
+func parseTimes(line string) (*time.Time, *time.Time, error) {
+	times := strings.Fields(line)
+	if len(times) != 2 {
+		return nil, nil, fmt.Errorf("invalid amount of fields where opening and closing times should be: %d", len(times))
+	}
+	if len(times[0]) != 5 || len(times[1]) != 5 {
+		return nil, nil, fmt.Errorf("invalid time format: %v. Must be in the format HH:MM", times)
+	}
+
+	opening, err := time.Parse(domain.TimeLayout, times[0])
 	if err != nil {
-		return domain.NewLineError(err, line)
+		return nil, nil, err
+	}
+	closing, err := time.Parse(domain.TimeLayout, times[1])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &opening, &closing, nil
+}
+
+func scanPrice(in *bufio.Reader, specs *config.Specs) error {
+	line, err := readLine(in)
+	if err != nil {
+		return err
 	}
 
 	price := strings.Fields(line)
@@ -143,20 +147,15 @@ func scanPrice(in *bufio.Reader, specs *config.Specs) error {
 func scanEvents(in *bufio.Reader, maxTable int) ([]domain.Event, error) {
 	var events []domain.Event
 	var lastEvent domain.Event
-	shouldRead := true
-	for shouldRead {
-		line, err := in.ReadString('\n')
-		line = strings.TrimSpace(line)
+	for {
+		line, err := readLine(in)
 		if err != nil {
-			if err == io.EOF {
-				shouldRead = false
-				if line == "" {
-					break
-				}
-			} else {
-				return nil, domain.NewLineError(err, line)
-			}
+			return nil, err
 		}
+		if line == "" {
+			break
+		}
+
 		event, err := scanEvent(line, lastEvent, maxTable)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse event: %w", err)
@@ -238,4 +237,12 @@ func scanTableNumber(tableNumberStr string, maxTable int) (int, error) {
 	}
 
 	return tableNumber, nil
+}
+
+func readLine(in *bufio.Reader) (string, error) {
+	line, err := in.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", domain.NewLineError(err, line)
+	}
+	return strings.TrimSpace(line), nil
 }
